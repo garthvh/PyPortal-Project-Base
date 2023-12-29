@@ -58,6 +58,8 @@ switch_state = 0
 switch_x = 130
 switch_y = 75
 
+uart = busio.UART(board.SDA, board.SCL, baudrate=38400)
+
 # ------------- Functions ------------- #
 # Backlight function
 # Value between 0 and 1 where 0 is OFF, 0.5 is 50% and 1 is 100% brightness.
@@ -169,7 +171,7 @@ else:
 # We want three buttons across the top of the screen
 TAB_BUTTON_Y = 0
 TAB_BUTTON_HEIGHT = 60
-TAB_BUTTON_WIDTH = int(screen_width / 2)
+TAB_BUTTON_WIDTH = int(screen_width / 4)
 
 # Portrait Touchscreen (rotation - 270)
 if rotation == 270:
@@ -194,8 +196,10 @@ elif rotation == 0:
 
 # ------------- Display Groups ------------- #
 splash = displayio.Group()  # The Main Display Group
-view_neopixel = displayio.Group()  # Group for View 1 objects
-view_sensors = displayio.Group()  # Group for View 3 objects
+view_neopixel = displayio.Group()  # Group for Neopixel objects
+view_sensors = displayio.Group()  # Group for Sensor objects
+view_wifi = displayio.Group()  # Group for wifi objects
+view_uart = displayio.Group()  # Group for uart objects
 
 # ------------- Setup for Images ------------- #
 # bg_group = displayio.Group()
@@ -232,7 +236,7 @@ button_neopixel = Button(
     y=0,  # Start at top
     width=TAB_BUTTON_WIDTH,  # Calculated width
     height=TAB_BUTTON_HEIGHT,  # Static height
-    label="Neo Pixel",
+    label="Pixel",
     label_font=font,
     label_color=WHITE,
     fill_color=SELECTED_BACKGROUND,
@@ -257,7 +261,39 @@ button_sensors = Button(
     selected_outline=SELECTED_OUTLINE,#0x2E2E2E,
     selected_label=BACKGROUND,
 )
-buttons.append(button_sensors)  # adding this button to the buttons grou
+buttons.append(button_sensors)  # adding this button to the buttons group
+
+button_wifi = Button(
+    x=TAB_BUTTON_WIDTH * 2,  # Start after width of 2 buttons
+    y=0,
+    width=TAB_BUTTON_WIDTH,
+    height=TAB_BUTTON_HEIGHT,
+    label="WiFi",
+    label_font=font,
+    label_color=WHITE,
+    fill_color=SELECTED_BACKGROUND,
+    outline_color=OUTLINE,
+    selected_fill=GRAY,
+    selected_outline=SELECTED_OUTLINE,#0x2E2E2E,
+    selected_label=BACKGROUND,
+)
+buttons.append(button_wifi)  # adding this button to the buttons group
+
+button_uart = Button(
+    x=TAB_BUTTON_WIDTH * 3,  # Start after width of 2 buttons
+    y=0,
+    width=TAB_BUTTON_WIDTH,
+    height=TAB_BUTTON_HEIGHT,
+    label="UART",
+    label_font=font,
+    label_color=WHITE,
+    fill_color=SELECTED_BACKGROUND,
+    outline_color=OUTLINE,
+    selected_fill=GRAY,
+    selected_outline=SELECTED_OUTLINE,#0x2E2E2E,
+    selected_label=BACKGROUND,
+)
+buttons.append(button_uart)  # adding this button to the buttons group
 
 # Add all of the tabs to the splash Group
 for b in buttons:
@@ -322,14 +358,42 @@ def switch_view(what_view):
     if what_view == 1:
         button_neopixel.selected = False
         button_sensors.selected = True
-        layerVisibility("hide", splash, view_sensors)
+        button_wifi.selected = True
+        button_uart.selected = True
         layerVisibility("show", splash, view_neopixel)
+        layerVisibility("hide", splash, view_sensors)
+        layerVisibility("hide", splash, view_wifi)
+        layerVisibility("show", splash, view_uart)
 
     elif what_view == 2:
         button_neopixel.selected = True
         button_sensors.selected = False
+        button_wifi.selected = True
+        button_uart.selected = True
         layerVisibility("hide", splash, view_neopixel)
         layerVisibility("show", splash, view_sensors)
+        layerVisibility("hide", splash, view_wifi)
+        layerVisibility("hide", splash, view_uart)
+
+    elif what_view == 3:
+        button_neopixel.selected = True
+        button_sensors.selected = True
+        button_wifi.selected = False
+        button_uart.selected = True
+        layerVisibility("hide", splash, view_neopixel)
+        layerVisibility("hide", splash, view_sensors)
+        layerVisibility("show", splash, view_wifi)
+        layerVisibility("hide", splash, view_uart)
+
+    elif what_view == 4:
+        button_neopixel.selected = True
+        button_sensors.selected = True
+        button_wifi.selected = True
+        button_uart.selected = False
+        layerVisibility("hide", splash, view_neopixel)
+        layerVisibility("hide", splash, view_sensors)
+        layerVisibility("hide", splash, view_wifi)
+        layerVisibility("show", splash, view_uart)
 
     # Set global button state
     view_live = what_view
@@ -338,6 +402,8 @@ def switch_view(what_view):
 # Set veriables and startup states
 button_neopixel.selected = False
 button_sensors.selected = True
+button_wifi.selected = True
+button_uart.selected = True
 button_switch.label = "OFF"
 button_switch.selected = True
 
@@ -355,6 +421,7 @@ board.DISPLAY.root_group = splash
 
 # ------------- Loop ------------- #
 while True:
+
     # Sensor Data Readings
     touch = ts.touch_point
     light = light_sensor.value
@@ -362,6 +429,10 @@ while True:
         touch, light, get_Temperature(adt)
     )
 
+    # await incoming message
+    if uart.in_waiting > 0:
+        uart_string = uart.readline()
+        print(uart_string)
     # ------------- Handle Button Presses ------------- #
     if touch:  # Only do this if the screen is touched
         # loop with buttons using enumerate() to number each button group as i
@@ -378,7 +449,17 @@ while True:
                     switch_view(2)
                     while ts.touch_point:
                         pass
-                if  i == 2:  # view_neopixel on / off button
+                if i == 2 and view_live != 3:  # only if view_wifi is visible
+                    pyportal.play_file(soundTab)
+                    switch_view(3)
+                    while ts.touch_point:
+                        pass
+                if i == 3 and view_live != 4:  # only if view_uart is visible
+                    pyportal.play_file(soundTab)
+                    switch_view(4)
+                    while ts.touch_point:
+                        pass
+                if  i == 4:  # view_neopixel on / off button
                     if view_live == 1:
                         # Toggle switch button type
                         pyportal.play_file(soundBeep)
@@ -387,7 +468,6 @@ while True:
                             b.label = "ON"
                             b.selected = False
                             pixel.fill(WHITE)
-                            print("Switch ON")
                         else:
                             switch_state = 0
                             b.label = "OFF"
@@ -398,7 +478,7 @@ while True:
                         while ts.touch_point:
                             pass
                         print("Neo Pixel Switch Pressed")
-                if i > 2:
+                if i > 4:
                     if view_live == 1:
                         # Momentary color button 
                         b.selected = True
